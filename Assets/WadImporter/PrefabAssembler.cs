@@ -8,8 +8,8 @@ namespace WadImporter
         readonly LevelModel levelModel;
         readonly MeshGenerator meshGenerator;
         readonly MaterialFactory materialFactory;
-        readonly Dictionary<string, Material> wallMaterials;
-        readonly Dictionary<string, Material> flatMaterials;
+        Dictionary<string, Material> wallMaterials;
+        Dictionary<string, Material> flatMaterials;
 
         public PrefabAssembler(LevelModel levelModel, Dictionary<string, Texture2D> textures, Dictionary<string, Texture2D> flats)
         {
@@ -30,9 +30,22 @@ namespace WadImporter
             
             return levelRoot;
         }
+        
+        public void AssemblePrefab(string levelName, LevelPackage levelPackage, GameObject parent)
+        {
+            CreateSectorObjects(parent, levelPackage, levelName);
+            CreateWallObjects(parent, levelPackage, levelName);
+        }
 
         void CreateSectorObjects(GameObject parent, LevelPackage levelPackage)
         {
+            CreateSectorObjects(parent, levelPackage, "");
+        }
+        
+        void CreateSectorObjects(GameObject parent, LevelPackage levelPackage, string levelName)
+        {
+            var levelPrefix = string.IsNullOrEmpty(levelName) ? "" : $"{levelName}_";
+            
             // Debug.Log($"Creating sector objects for {levelModel.sectors.Length} sectors");
             for (var i = 0; i < levelModel.sectors.Length; i++)
             {
@@ -43,6 +56,7 @@ namespace WadImporter
                 var floorMesh = meshGenerator.GenerateFloorMesh(i);
                 if (floorMesh != null && floorMesh.vertices.Length > 0)
                 {
+                    floorMesh.name = $"{levelPrefix}Floor_{i}";
                     // Debug.Log($"Created floor mesh for sector {i} with {floorMesh.vertices.Length} vertices");
                     var floorObject = new GameObject($"Floor_{i}");
                     floorObject.transform.SetParent(sectorObject.transform);
@@ -63,6 +77,7 @@ namespace WadImporter
                 var ceilingMesh = meshGenerator.GenerateCeilingMesh(i);
                 if (ceilingMesh != null && ceilingMesh.vertices.Length > 0)
                 {
+                    ceilingMesh.name = $"{levelPrefix}Ceiling_{i}";
                     var ceilingObject = new GameObject($"Ceiling_{i}");
                     ceilingObject.transform.SetParent(sectorObject.transform);
                     
@@ -79,6 +94,12 @@ namespace WadImporter
 
         void CreateWallObjects(GameObject parent, LevelPackage levelPackage)
         {
+            CreateWallObjects(parent, levelPackage, "");
+        }
+        
+        void CreateWallObjects(GameObject parent, LevelPackage levelPackage, string levelName)
+        {
+            var levelPrefix = string.IsNullOrEmpty(levelName) ? "" : $"{levelName}_";
             var wallsContainer = new GameObject("Walls");
             wallsContainer.transform.SetParent(parent.transform);
             
@@ -89,6 +110,7 @@ namespace WadImporter
                 var frontWallMesh = meshGenerator.GenerateWallMesh(i, false);
                 if (frontWallMesh != null && frontWallMesh.vertices.Length > 0)
                 {
+                    frontWallMesh.name = $"{levelPrefix}Wall_{i}_Front";
                     var frontWallObject = new GameObject($"Wall_{i}_Front");
                     frontWallObject.transform.SetParent(wallsContainer.transform);
                     
@@ -109,6 +131,7 @@ namespace WadImporter
                     var backWallMesh = meshGenerator.GenerateWallMesh(i, true);
                     if (backWallMesh != null && backWallMesh.vertices.Length > 0)
                     {
+                        backWallMesh.name = $"{levelPrefix}Wall_{i}_Back";
                         var backWallObject = new GameObject($"Wall_{i}_Back");
                         backWallObject.transform.SetParent(wallsContainer.transform);
                         
@@ -202,6 +225,13 @@ namespace WadImporter
                 allMaterials[kvp.Key] = kvp.Value;
             
             return allMaterials;
+        }
+        
+        public void ShareMaterialsFrom(PrefabAssembler other)
+        {
+            // Share material dictionaries
+            wallMaterials = other.wallMaterials;
+            flatMaterials = other.flatMaterials;
         }
     }
 }

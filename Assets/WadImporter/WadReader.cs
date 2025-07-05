@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using UnityEngine;
 
@@ -25,6 +26,8 @@ namespace WadImporter
         readonly byte[] data;
         readonly WadHeader header;
         readonly Dictionary<string, WadLump> lumps;
+        List<string> lumpOrder;
+        Dictionary<int, WadLump> lumpByIndex;
 
         public WadReader(byte[] wadData)
         {
@@ -97,7 +100,55 @@ namespace WadImporter
             return 0;
         }
 
-        public IEnumerable<string> GetLumpNames() => lumps.Keys;
+        public IEnumerable<string> GetLumpNames() => lumpOrder ?? lumps.Keys.ToList();
+        
+        public int GetLumpCount() => lumpOrder?.Count ?? lumps.Count;
+        
+        public int FindLumpIndex(string name)
+        {
+            return lumpOrder?.IndexOf(name) ?? -1;
+        }
+        
+        public string GetLumpNameAtIndex(int index)
+        {
+            return (lumpOrder != null && index >= 0 && index < lumpOrder.Count) ? lumpOrder[index] : "";
+        }
+        
+        public T[] ReadLumpArrayAtIndex<T>(int index, Func<BinaryReader, T> readFunc)
+        {
+            if (!lumpByIndex.ContainsKey(index))
+                return new T[0];
+                
+            var lump = lumpByIndex[index];
+            Debug.Log($"ReadLumpArrayAtIndex: Reading lump '{lump.name}' at index {index}, size: {lump.size}");
+            
+            var result = ReadLumpDirect(lump, readFunc);
+            Debug.Log($"ReadLumpArrayAtIndex: Lump '{lump.name}' returned {result.Length} items");
+            return result;
+        }
+        
+        T[] ReadLumpDirect<T>(WadLump lump, Func<BinaryReader, T> readFunc)
+        {
+            if (lump.size == 0)
+                return new T[0];
+
+            var elementSize = GetItemSize<T>();
+            if (elementSize == 0)
+                return new T[0];
+
+            var count = lump.size / elementSize;
+            var result = new T[count];
+
+            using (var stream = new MemoryStream(data))
+            using (var reader = new BinaryReader(stream))
+            {
+                stream.Seek(lump.offset, SeekOrigin.Begin);
+                for (var i = 0; i < count; i++)
+                    result[i] = readFunc(reader);
+            }
+
+            return result;
+        }
 
         WadHeader ReadHeader()
         {
@@ -120,6 +171,8 @@ namespace WadImporter
         Dictionary<string, WadLump> ReadDirectory()
         {
             var result = new Dictionary<string, WadLump>();
+            lumpOrder = new List<string>();
+            lumpByIndex = new Dictionary<int, WadLump>();
 
             using (var stream = new MemoryStream(data))
             using (var reader = new BinaryReader(stream))
@@ -133,12 +186,20 @@ namespace WadImporter
                     var nameBytes = reader.ReadBytes(8);
                     var name = Encoding.ASCII.GetString(nameBytes).TrimEnd('\0');
 
-                    result[name] = new WadLump
+                    var lump = new WadLump
                     {
                         offset = offset,
                         size = size,
                         name = name
                     };
+
+                    // Store by name (will overwrite duplicates)
+                    result[name] = lump;
+                    
+                    // Store by index (preserves each unique lump)
+                    lumpByIndex[i] = lump;
+                    
+                    lumpOrder.Add(name);
                 }
             }
 
