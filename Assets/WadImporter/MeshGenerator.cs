@@ -37,7 +37,7 @@ namespace WadImporter
             }
 
             mesh.vertices = meshVertices;
-            mesh.triangles = triangles;
+            mesh.triangles = ReverseTriangles(triangles);
             mesh.uv = uvs;
             mesh.RecalculateNormals();
 
@@ -64,7 +64,7 @@ namespace WadImporter
             }
 
             mesh.vertices = meshVertices;
-            mesh.triangles = ReverseTriangles(triangles);
+            mesh.triangles = triangles;
             mesh.uv = uvs;
             mesh.RecalculateNormals();
 
