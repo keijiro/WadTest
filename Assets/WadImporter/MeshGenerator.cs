@@ -32,12 +32,12 @@ namespace WadImporter
 
             for (var i = 0; i < vertices.Length; i++)
             {
-                meshVertices[i] = new Vector3(vertices[i].x, sector.FloorHeightUnits, -vertices[i].y);
+                meshVertices[i] = new Vector3(vertices[i].x, sector.FloorHeightUnits, vertices[i].y);
                 uvs[i] = new Vector2(vertices[i].x / 64f, vertices[i].y / 64f);
             }
 
             mesh.vertices = meshVertices;
-            mesh.triangles = ReverseTriangles(triangles);
+            mesh.triangles = triangles;
             mesh.uv = uvs;
             mesh.RecalculateNormals();
 
@@ -59,12 +59,12 @@ namespace WadImporter
 
             for (var i = 0; i < vertices.Length; i++)
             {
-                meshVertices[i] = new Vector3(vertices[i].x, sector.CeilingHeightUnits, -vertices[i].y);
+                meshVertices[i] = new Vector3(vertices[i].x, sector.CeilingHeightUnits, vertices[i].y);
                 uvs[i] = new Vector2(vertices[i].x / 64f, vertices[i].y / 64f);
             }
 
             mesh.vertices = meshVertices;
-            mesh.triangles = triangles;
+            mesh.triangles = ReverseTriangles(triangles);
             mesh.uv = uvs;
             mesh.RecalculateNormals();
 
@@ -120,10 +120,10 @@ namespace WadImporter
             var baseIndex = vertices.Count;
             var direction = isBack ? -1 : 1;
 
-            vertices.Add(new Vector3(startVertex.x, sector.FloorHeightUnits, -startVertex.y));
-            vertices.Add(new Vector3(endVertex.x, sector.FloorHeightUnits, -endVertex.y));
-            vertices.Add(new Vector3(endVertex.x, sector.CeilingHeightUnits, -endVertex.y));
-            vertices.Add(new Vector3(startVertex.x, sector.CeilingHeightUnits, -startVertex.y));
+            vertices.Add(new Vector3(startVertex.x, sector.FloorHeightUnits, startVertex.y));
+            vertices.Add(new Vector3(endVertex.x, sector.FloorHeightUnits, endVertex.y));
+            vertices.Add(new Vector3(endVertex.x, sector.CeilingHeightUnits, endVertex.y));
+            vertices.Add(new Vector3(startVertex.x, sector.CeilingHeightUnits, startVertex.y));
 
             uvs.Add(new Vector2(0, 0));
             uvs.Add(new Vector2(lineLength / 64f, 0));
@@ -132,13 +132,13 @@ namespace WadImporter
 
             if (direction > 0)
             {
-                triangles.AddRange(new[] { baseIndex, baseIndex + 1, baseIndex + 2 });
-                triangles.AddRange(new[] { baseIndex, baseIndex + 2, baseIndex + 3 });
+                triangles.AddRange(new[] { baseIndex, baseIndex + 2, baseIndex + 1 });
+                triangles.AddRange(new[] { baseIndex, baseIndex + 3, baseIndex + 2 });
             }
             else
             {
-                triangles.AddRange(new[] { baseIndex, baseIndex + 2, baseIndex + 1 });
-                triangles.AddRange(new[] { baseIndex, baseIndex + 3, baseIndex + 2 });
+                triangles.AddRange(new[] { baseIndex, baseIndex + 1, baseIndex + 2 });
+                triangles.AddRange(new[] { baseIndex, baseIndex + 2, baseIndex + 3 });
             }
         }
 
@@ -171,10 +171,10 @@ namespace WadImporter
             var baseIndex = vertices.Count;
             var segmentHeight = topHeight - bottomHeight;
 
-            vertices.Add(new Vector3(startVertex.x, bottomHeight, -startVertex.y));
-            vertices.Add(new Vector3(endVertex.x, bottomHeight, -endVertex.y));
-            vertices.Add(new Vector3(endVertex.x, topHeight, -endVertex.y));
-            vertices.Add(new Vector3(startVertex.x, topHeight, -startVertex.y));
+            vertices.Add(new Vector3(startVertex.x, bottomHeight, startVertex.y));
+            vertices.Add(new Vector3(endVertex.x, bottomHeight, endVertex.y));
+            vertices.Add(new Vector3(endVertex.x, topHeight, endVertex.y));
+            vertices.Add(new Vector3(startVertex.x, topHeight, startVertex.y));
 
             uvs.Add(new Vector2(0, 0));
             uvs.Add(new Vector2(lineLength / 64f, 0));
@@ -183,13 +183,13 @@ namespace WadImporter
 
             if (direction > 0)
             {
-                triangles.AddRange(new[] { baseIndex, baseIndex + 1, baseIndex + 2 });
-                triangles.AddRange(new[] { baseIndex, baseIndex + 2, baseIndex + 3 });
+                triangles.AddRange(new[] { baseIndex, baseIndex + 2, baseIndex + 1 });
+                triangles.AddRange(new[] { baseIndex, baseIndex + 3, baseIndex + 2 });
             }
             else
             {
-                triangles.AddRange(new[] { baseIndex, baseIndex + 2, baseIndex + 1 });
-                triangles.AddRange(new[] { baseIndex, baseIndex + 3, baseIndex + 2 });
+                triangles.AddRange(new[] { baseIndex, baseIndex + 1, baseIndex + 2 });
+                triangles.AddRange(new[] { baseIndex, baseIndex + 2, baseIndex + 3 });
             }
         }
 
