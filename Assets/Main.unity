@@ -295,9 +295,45 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -4385045149146015383, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -4024938671871104792, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -2333344239875729402, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -2081272015095914740, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -1612388487464993513, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1022517688666198752, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
       propertyPath: m_Name
       value: Level_DOOM1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3626860750913156713, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5464037828471153468, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6134481625954494341, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8827533386929218402, guid: c648f0e02893345c3a7f21d48a3ce152, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
