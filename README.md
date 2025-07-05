@@ -1,5 +1,7 @@
 # Doom WAD Unity Importer (Experimental)
 
+![Screenshot](https://github.com/user-attachments/assets/06aa658e-1570-4385-93f6-5303d1e70e86)
+
 An experimental Unity Editor extension that explores an agentic coding approach
 through the development of an importer for classic Doom WAD files. This project
 serves as a testbed for applying and evaluating agentic coding in a non-trivial
