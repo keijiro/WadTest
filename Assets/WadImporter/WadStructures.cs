@@ -144,15 +144,27 @@ namespace WadImporter
 
         public static WadTexture Read(BinaryReader reader)
         {
+            var startPos = reader.BaseStream.Position;
+            var nameBytes = reader.ReadBytes(8);
+            var name = System.Text.Encoding.ASCII.GetString(nameBytes).TrimEnd('\0');
+            
+            // Skip 4 bytes (unused in original DOOM format)
+            reader.ReadInt32();
+            
             var texture = new WadTexture
             {
-                name = System.Text.Encoding.ASCII.GetString(reader.ReadBytes(8)).TrimEnd('\0'),
-                masked = reader.ReadUInt16(),
+                name = name,
                 width = reader.ReadUInt16(),
                 height = reader.ReadUInt16(),
+                // Skip 4 bytes (unused in original DOOM format)
                 columnDirectory = reader.ReadUInt32(),
                 patchCount = reader.ReadUInt16()
             };
+
+            if (texture.width == 0 || texture.height == 0)
+            {
+                Debug.LogWarning($"[WadTexture] Texture '{texture.name}' has zero dimensions: {texture.width}x{texture.height} at offset {startPos:X}");
+            }
 
             texture.patches = new WadPatch[texture.patchCount];
             for (var i = 0; i < texture.patchCount; i++)

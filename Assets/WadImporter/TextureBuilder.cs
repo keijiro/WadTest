@@ -22,8 +22,15 @@ namespace WadImporter
         {
             var textures = new Dictionary<string, Texture2D>();
             
+            Debug.Log($"[TextureBuilder] Starting texture build process");
+            Debug.Log($"[TextureBuilder] Palette loaded: {palette?.Length} colors");
+            Debug.Log($"[TextureBuilder] PNAMES loaded: {pnames?.Length} entries");
+            
             var texture1 = LoadTextureDirectory("TEXTURE1");
             var texture2 = LoadTextureDirectory("TEXTURE2");
+            
+            Debug.Log($"[TextureBuilder] TEXTURE1 contains {texture1.Length} textures");
+            Debug.Log($"[TextureBuilder] TEXTURE2 contains {texture2.Length} textures");
             
             foreach (var tex in texture1)
             {
@@ -39,22 +46,39 @@ namespace WadImporter
                     textures[tex.name] = builtTexture;
             }
             
+            Debug.Log($"[TextureBuilder] Successfully built {textures.Count} textures");
             return textures;
         }
 
         public Texture2D BuildFlatTexture(string name)
         {
             var flatData = wadReader.GetLumpData(name);
-            if (flatData == null || flatData.Length != 64 * 64)
+            if (flatData == null)
+            {
+                Debug.LogWarning($"[TextureBuilder] Flat texture data not found: {name}");
                 return CreateDefaultTexture(64, 64);
+            }
+            
+            if (flatData.Length != 64 * 64)
+            {
+                Debug.LogWarning($"[TextureBuilder] Flat texture {name} has invalid size: {flatData.Length} bytes (expected 4096)");
+                return CreateDefaultTexture(64, 64);
+            }
 
+            Debug.Log($"[TextureBuilder] Building flat texture: {name}");
             var texture = new Texture2D(64, 64, TextureFormat.RGB24, false);
             var colors = new Color[64 * 64];
 
             for (var i = 0; i < flatData.Length; i++)
             {
                 var paletteIndex = flatData[i];
-                colors[i] = palette[paletteIndex];
+                if (paletteIndex < palette.Length)
+                    colors[i] = palette[paletteIndex];
+                else
+                {
+                    Debug.LogWarning($"[TextureBuilder] Invalid palette index {paletteIndex} in flat {name}");
+                    colors[i] = Color.magenta;
+                }
             }
 
             texture.SetPixels(colors);
@@ -68,7 +92,12 @@ namespace WadImporter
         Texture2D BuildTexture(WadTexture wadTexture)
         {
             if (wadTexture.width <= 0 || wadTexture.height <= 0)
+            {
+                Debug.LogWarning($"[TextureBuilder] Invalid texture dimensions: {wadTexture.name} (width={wadTexture.width}, height={wadTexture.height})");
                 return CreateDefaultTexture(64, 64);
+            }
+
+            Debug.Log($"[TextureBuilder] Building texture: {wadTexture.name} ({wadTexture.width}x{wadTexture.height}) with {wadTexture.patches.Length} patches");
 
             var texture = new Texture2D(wadTexture.width, wadTexture.height, TextureFormat.RGBA32, false);
             var colors = new Color[wadTexture.width * wadTexture.height];
@@ -76,17 +105,32 @@ namespace WadImporter
             for (var i = 0; i < colors.Length; i++)
                 colors[i] = Color.clear;
 
+            var patchesApplied = 0;
             foreach (var patch in wadTexture.patches)
             {
                 if (patch.patch >= pnames.Length)
+                {
+                    Debug.LogWarning($"[TextureBuilder] Patch index {patch.patch} out of range (max: {pnames.Length - 1}) for texture {wadTexture.name}");
                     continue;
+                }
 
                 var patchName = pnames[patch.patch];
                 var patchData = wadReader.GetLumpData(patchName);
                 if (patchData == null)
+                {
+                    Debug.LogWarning($"[TextureBuilder] Patch data not found: {patchName} for texture {wadTexture.name}");
                     continue;
+                }
 
+                Debug.Log($"[TextureBuilder] Applying patch {patchName} ({patchData.Length} bytes) at ({patch.originX}, {patch.originY})");
                 ApplyPatch(colors, wadTexture.width, wadTexture.height, patchData, patch.originX, patch.originY);
+                patchesApplied++;
+            }
+
+            if (patchesApplied == 0)
+            {
+                Debug.LogWarning($"[TextureBuilder] No patches applied for texture {wadTexture.name} - using default texture");
+                return CreateDefaultTexture(wadTexture.width, wadTexture.height);
             }
 
             texture.SetPixels(colors);
@@ -94,6 +138,7 @@ namespace WadImporter
             texture.filterMode = FilterMode.Point;
             texture.wrapMode = TextureWrapMode.Repeat;
             
+            Debug.Log($"[TextureBuilder] Successfully built texture: {wadTexture.name} with {patchesApplied} patches");
             return texture;
         }
 
@@ -130,7 +175,12 @@ namespace WadImporter
                             {
                                 var pixelIndex = targetY * textureWidth + targetX;
                                 if (pixelIndex >= 0 && pixelIndex < targetColors.Length)
-                                    targetColors[pixelIndex] = palette[paletteIndex];
+                                {
+                                    if (paletteIndex >= 0 && paletteIndex < palette.Length)
+                                        targetColors[pixelIndex] = palette[paletteIndex];
+                                    else
+                                        Debug.LogWarning($"[TextureBuilder] Invalid palette index {paletteIndex} (max: {palette.Length - 1})");
+                                }
                             }
                         }
 
@@ -143,9 +193,19 @@ namespace WadImporter
         Color[] LoadPalette()
         {
             var playpalData = wadReader.GetLumpData("PLAYPAL");
-            if (playpalData == null || playpalData.Length < 768)
+            if (playpalData == null)
+            {
+                Debug.LogError("[TextureBuilder] PLAYPAL lump not found - using default palette");
                 return CreateDefaultPalette();
+            }
+            
+            if (playpalData.Length < 768)
+            {
+                Debug.LogError($"[TextureBuilder] PLAYPAL lump too small ({playpalData.Length} bytes, expected 768) - using default palette");
+                return CreateDefaultPalette();
+            }
 
+            Debug.Log($"[TextureBuilder] Successfully loaded PLAYPAL with {playpalData.Length} bytes");
             var colors = new Color[256];
             for (var i = 0; i < 256; i++)
             {
@@ -160,9 +220,10 @@ namespace WadImporter
 
         string[] LoadPnames()
         {
-            return wadReader.ReadLumpData("PNAMES", reader =>
+            var pnamesData = wadReader.ReadLumpData("PNAMES", reader =>
             {
                 var count = reader.ReadInt32();
+                Debug.Log($"[TextureBuilder] PNAMES contains {count} patch names");
                 var names = new string[count];
                 
                 for (var i = 0; i < count; i++)
@@ -172,7 +233,15 @@ namespace WadImporter
                 }
                 
                 return names;
-            }) ?? new string[0];
+            });
+            
+            if (pnamesData == null)
+            {
+                Debug.LogError("[TextureBuilder] PNAMES lump not found");
+                return new string[0];
+            }
+            
+            return pnamesData;
         }
 
         WadTexture[] LoadTextureDirectory(string lumpName)
@@ -210,6 +279,7 @@ namespace WadImporter
 
         Texture2D CreateDefaultTexture(int width, int height)
         {
+            Debug.LogWarning($"[TextureBuilder] Creating default magenta texture ({width}x{height}) - this indicates a texture loading failure");
             var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
             var colors = new Color[width * height];
             
@@ -225,6 +295,7 @@ namespace WadImporter
 
         Color[] CreateDefaultPalette()
         {
+            Debug.LogWarning("[TextureBuilder] Creating default white palette - this indicates PLAYPAL loading failure");
             var colors = new Color[256];
             for (var i = 0; i < 256; i++)
                 colors[i] = Color.white;
