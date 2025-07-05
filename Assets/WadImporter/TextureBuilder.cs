@@ -22,15 +22,8 @@ namespace WadImporter
         {
             var textures = new Dictionary<string, Texture2D>();
             
-            Debug.Log($"[TextureBuilder] Starting texture build process");
-            Debug.Log($"[TextureBuilder] Palette loaded: {palette?.Length} colors");
-            Debug.Log($"[TextureBuilder] PNAMES loaded: {pnames?.Length} entries");
-            
             var texture1 = LoadTextureDirectory("TEXTURE1");
             var texture2 = LoadTextureDirectory("TEXTURE2");
-            
-            Debug.Log($"[TextureBuilder] TEXTURE1 contains {texture1.Length} textures");
-            Debug.Log($"[TextureBuilder] TEXTURE2 contains {texture2.Length} textures");
             
             foreach (var tex in texture1)
             {
@@ -46,7 +39,6 @@ namespace WadImporter
                     textures[tex.name] = builtTexture;
             }
             
-            Debug.Log($"[TextureBuilder] Successfully built {textures.Count} textures");
             return textures;
         }
 
@@ -65,7 +57,6 @@ namespace WadImporter
                 return CreateDefaultTexture(64, 64);
             }
 
-            Debug.Log($"[TextureBuilder] Building flat texture: {name}");
             var texture = new Texture2D(64, 64, TextureFormat.RGB24, false);
             var colors = new Color[64 * 64];
 
@@ -97,8 +88,6 @@ namespace WadImporter
                 return CreateDefaultTexture(64, 64);
             }
 
-            Debug.Log($"[TextureBuilder] Building texture: {wadTexture.name} ({wadTexture.width}x{wadTexture.height}) with {wadTexture.patches.Length} patches");
-
             var texture = new Texture2D(wadTexture.width, wadTexture.height, TextureFormat.RGBA32, false);
             var colors = new Color[wadTexture.width * wadTexture.height];
             
@@ -122,7 +111,6 @@ namespace WadImporter
                     continue;
                 }
 
-                Debug.Log($"[TextureBuilder] Applying patch {patchName} ({patchData.Length} bytes) at ({patch.originX}, {patch.originY})");
                 ApplyPatch(colors, wadTexture.width, wadTexture.height, patchData, patch.originX, patch.originY);
                 patchesApplied++;
             }
@@ -138,7 +126,6 @@ namespace WadImporter
             texture.filterMode = FilterMode.Point;
             texture.wrapMode = TextureWrapMode.Repeat;
             
-            Debug.Log($"[TextureBuilder] Successfully built texture: {wadTexture.name} with {patchesApplied} patches");
             return texture;
         }
 
@@ -205,7 +192,6 @@ namespace WadImporter
                 return CreateDefaultPalette();
             }
 
-            Debug.Log($"[TextureBuilder] Successfully loaded PLAYPAL with {playpalData.Length} bytes");
             var colors = new Color[256];
             for (var i = 0; i < 256; i++)
             {
@@ -223,7 +209,6 @@ namespace WadImporter
             var pnamesData = wadReader.ReadLumpData("PNAMES", reader =>
             {
                 var count = reader.ReadInt32();
-                Debug.Log($"[TextureBuilder] PNAMES contains {count} patch names");
                 var names = new string[count];
                 
                 for (var i = 0; i < count; i++)

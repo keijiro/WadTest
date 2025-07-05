@@ -18,11 +18,16 @@ namespace WadImporter
         {
             var sector = levelModel.sectors[sectorIndex];
             var sectorLines = GetSectorLines(sectorIndex);
-            // Debug.Log($"Sector {sectorIndex}: Found {sectorLines.Count} lines");
+            
             var vertices = ExtractSectorVertices(sectorLines);
-            // Debug.Log($"Sector {sectorIndex}: Extracted {vertices.Length} unique vertices");
-            var triangles = TriangulateSector(vertices);
-            // Debug.Log($"Sector {sectorIndex}: Triangulated {triangles.Length / 3} triangles");
+            
+            if (vertices.Length < 3)
+            {
+                Debug.LogWarning($"[MeshGenerator] Sector {sectorIndex}: Not enough vertices ({vertices.Length}) for triangulation, skipping floor mesh");
+                return null;
+            }
+            
+            var triangles = TriangulateSector(vertices, sectorIndex, "Floor");
 
             var mesh = new Mesh();
             mesh.name = $"Floor_{sectorIndex}";
@@ -49,7 +54,14 @@ namespace WadImporter
             var sector = levelModel.sectors[sectorIndex];
             var sectorLines = GetSectorLines(sectorIndex);
             var vertices = ExtractSectorVertices(sectorLines);
-            var triangles = TriangulateSector(vertices);
+            
+            if (vertices.Length < 3)
+            {
+                Debug.LogWarning($"[MeshGenerator] Sector {sectorIndex}: Not enough vertices ({vertices.Length}) for triangulation, skipping ceiling mesh");
+                return null;
+            }
+            
+            var triangles = TriangulateSector(vertices, sectorIndex, "Ceiling");
 
             var mesh = new Mesh();
             mesh.name = $"Ceiling_{sectorIndex}";
@@ -221,153 +233,255 @@ namespace WadImporter
 
         Vector2[] ExtractSectorVertices(List<int> sectorLines)
         {
-            // Build edge connections to preserve vertex order
+            if (sectorLines.Count < 3)
+                return new Vector2[0];
+            
+            // Build edge connectivity map
             var edges = new Dictionary<Vector2, List<Vector2>>();
-
+            
             foreach (var lineIndex in sectorLines)
             {
                 var linedef = levelModel.linedefs[lineIndex];
-                var start = levelModel.vertices[linedef.startVertex].ToVector2();
-                var end = levelModel.vertices[linedef.endVertex].ToVector2();
-
-                // Add edges in both directions for now
-                if (!edges.ContainsKey(start))
-                    edges[start] = new List<Vector2>();
-                if (!edges.ContainsKey(end))
-                    edges[end] = new List<Vector2>();
-
-                edges[start].Add(end);
-                edges[end].Add(start);
+                var v1 = levelModel.vertices[linedef.startVertex].ToVector2();
+                var v2 = levelModel.vertices[linedef.endVertex].ToVector2();
+                
+                if (!edges.ContainsKey(v1))
+                    edges[v1] = new List<Vector2>();
+                if (!edges.ContainsKey(v2))
+                    edges[v2] = new List<Vector2>();
+                
+                edges[v1].Add(v2);
+                edges[v2].Add(v1);
             }
-
-            // Find a starting vertex
-            if (edges.Count == 0)
+            
+            if (edges.Count < 3)
                 return new Vector2[0];
-
-            var startVertex = edges.Keys.First();
-            var orderedVertices = new List<Vector2>();
-            var visited = new HashSet<Vector2>();
-            var current = startVertex;
-
-            // Walk around the perimeter
-            while (orderedVertices.Count < edges.Count)
+            
+            // Find the leftmost vertex as starting point
+            var start = edges.Keys.OrderBy(v => v.x).ThenBy(v => v.y).First();
+            
+            // Trace the boundary
+            var result = new List<Vector2>();
+            var current = start;
+            var previous = new Vector2(float.MinValue, current.y); // Virtual point to the left
+            
+            do
             {
-                orderedVertices.Add(current);
-                visited.Add(current);
-
-                // Find the next unvisited vertex
-                var found = false;
+                result.Add(current);
+                
+                // Find the next vertex with the rightmost turn
+                Vector2 next = Vector2.zero;
+                var bestAngle = float.MinValue;
+                
                 foreach (var neighbor in edges[current])
                 {
-                    if (!visited.Contains(neighbor))
+                    if (result.Count > 1 && neighbor == result[result.Count - 2])
+                        continue; // Don't go back
+                    
+                    var angle = Vector2.SignedAngle(current - previous, neighbor - current);
+                    if (angle > bestAngle)
                     {
-                        current = neighbor;
-                        found = true;
-                        break;
+                        bestAngle = angle;
+                        next = neighbor;
                     }
                 }
-
-                if (!found)
-                {
-                    // If we can't continue, just return what we have
+                
+                if (next == Vector2.zero || (next == start && result.Count > 2))
                     break;
-                }
+                
+                previous = current;
+                current = next;
+                
+            } while (result.Count < edges.Count);
+            
+            return result.ToArray();
+        }
+        
+        List<Vector2> ComputeConvexHull(List<Vector2> points)
+        {
+            if (points.Count <= 3)
+                return points;
+            
+            // Sort points lexicographically
+            points.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+            
+            // Build lower hull
+            var hull = new List<Vector2>();
+            for (var i = 0; i < points.Count; i++)
+            {
+                while (hull.Count >= 2 && Cross(hull[hull.Count - 2], hull[hull.Count - 1], points[i]) <= 0)
+                    hull.RemoveAt(hull.Count - 1);
+                hull.Add(points[i]);
             }
-
-            return orderedVertices.ToArray();
+            
+            // Build upper hull
+            var t = hull.Count + 1;
+            for (var i = points.Count - 2; i >= 0; i--)
+            {
+                while (hull.Count >= t && Cross(hull[hull.Count - 2], hull[hull.Count - 1], points[i]) <= 0)
+                    hull.RemoveAt(hull.Count - 1);
+                hull.Add(points[i]);
+            }
+            
+            hull.RemoveAt(hull.Count - 1); // Remove last point as it's same as first
+            return hull;
+        }
+        
+        float Cross(Vector2 a, Vector2 b, Vector2 c)
+        {
+            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
         }
 
-        int[] TriangulateSector(Vector2[] vertices)
+        int[] TriangulateSector(Vector2[] vertices, int sectorIndex = -1, string meshType = "Unknown")
         {
             if (vertices.Length < 3)
                 return new int[0];
 
-            // Use ear clipping algorithm for better triangulation
-            var indices = new List<int>();
-            var vertexList = new List<int>();
-
-            // Initialize vertex lis
-            for (var i = 0; i < vertices.Length; i++)
-                vertexList.Add(i);
-
-            // Check if vertices are in clockwise order
-            var area = 0f;
-            for (var i = 0; i < vertices.Length; i++)
+            var triangles = new List<int>();
+            
+            // Check if polygon is convex
+            if (IsConvexPolygon(vertices))
             {
-                var v1 = vertices[i];
-                var v2 = vertices[(i + 1) % vertices.Length];
-                area += (v2.x - v1.x) * (v2.y + v1.y);
-            }
-
-            var clockwise = area > 0;
-
-            // Ear clipping
-            while (vertexList.Count > 3)
-            {
-                var earFound = false;
-
-                for (var i = 0; i < vertexList.Count; i++)
+                // Simple fan triangulation for convex polygons
+                for (var i = 1; i < vertices.Length - 1; i++)
                 {
-                    var prev = vertexList[(i + vertexList.Count - 1) % vertexList.Count];
-                    var curr = vertexList[i];
-                    var next = vertexList[(i + 1) % vertexList.Count];
-
-                    if (IsEar(vertices, vertexList, prev, curr, next, clockwise))
+                    triangles.Add(0);
+                    triangles.Add(i);
+                    triangles.Add(i + 1);
+                }
+                return triangles.ToArray();
+            }
+            
+            // For concave polygons, use improved ear clipping
+            var indices = new List<int>(vertices.Length);
+            for (var i = 0; i < vertices.Length; i++)
+                indices.Add(i);
+            
+            var attempt = 0;
+            while (indices.Count > 3 && attempt < vertices.Length * 2)
+            {
+                attempt++;
+                var earFound = false;
+                
+                for (var i = 0; i < indices.Count; i++)
+                {
+                    var prev = indices[(i + indices.Count - 1) % indices.Count];
+                    var curr = indices[i];
+                    var next = indices[(i + 1) % indices.Count];
+                    
+                    if (IsValidEar(vertices, indices, prev, curr, next))
                     {
-                        // Add triangle
-                        if (clockwise)
-                        {
-                            indices.Add(prev);
-                            indices.Add(curr);
-                            indices.Add(next);
-                        }
-                        else
-                        {
-                            indices.Add(prev);
-                            indices.Add(next);
-                            indices.Add(curr);
-                        }
-
-                        // Remove the ear vertex
-                        vertexList.RemoveAt(i);
+                        triangles.Add(prev);
+                        triangles.Add(curr);
+                        triangles.Add(next);
+                        
+                        indices.RemoveAt(i);
                         earFound = true;
                         break;
                     }
                 }
-
+                
                 if (!earFound)
                 {
-                    // Fallback to fan triangulation if ear clipping fails
-                    Debug.LogWarning("Ear clipping failed, falling back to fan triangulation");
-                    indices.Clear();
+                    Debug.LogWarning($"[TriangulateSector] Sector {sectorIndex} ({meshType}): Ear clipping stuck, using fan triangulation");
+                    triangles.Clear();
+                    
+                    // Fallback to fan triangulation
                     for (var i = 1; i < vertices.Length - 1; i++)
                     {
-                        indices.Add(0);
-                        indices.Add(i);
-                        indices.Add(i + 1);
+                        triangles.Add(0);
+                        triangles.Add(i);
+                        triangles.Add(i + 1);
                     }
                     break;
                 }
             }
-
-            // Add the last triangle
-            if (vertexList.Count == 3)
+            
+            // Add final triangle
+            if (indices.Count == 3)
             {
-                if (clockwise)
+                triangles.Add(indices[0]);
+                triangles.Add(indices[1]);
+                triangles.Add(indices[2]);
+            }
+            
+            return triangles.ToArray();
+        }
+        
+        bool IsValidEar(Vector2[] vertices, List<int> indices, int prev, int curr, int next)
+        {
+            var a = vertices[prev];
+            var b = vertices[curr];
+            var c = vertices[next];
+            
+            // Check if angle is convex
+            var cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            if (cross >= 0) // Reflex angle
+                return false;
+            
+            // Check if any other vertex is inside the triangle
+            for (var i = 0; i < indices.Count; i++)
+            {
+                var idx = indices[i];
+                if (idx == prev || idx == curr || idx == next)
+                    continue;
+                
+                if (IsPointInTriangle(vertices[idx], a, b, c))
+                    return false;
+            }
+            
+            return true;
+        }
+        
+        List<List<int>> DecomposeToConvexPolygons(Vector2[] vertices)
+        {
+            // Simple approach: if polygon is already convex, return as-is
+            if (IsConvexPolygon(vertices))
+            {
+                var indices = new List<int>();
+                for (var i = 0; i < vertices.Length; i++)
+                    indices.Add(i);
+                return new List<List<int>> { indices };
+            }
+            
+            // For now, return the original polygon and let fan triangulation handle it
+            // This is a simplified implementation - a full convex decomposition is complex
+            var result = new List<int>();
+            for (var i = 0; i < vertices.Length; i++)
+                result.Add(i);
+            return new List<List<int>> { result };
+        }
+        
+        bool IsConvexPolygon(Vector2[] vertices)
+        {
+            if (vertices.Length < 3) return false;
+            
+            var sign = 0f;
+            for (var i = 0; i < vertices.Length; i++)
+            {
+                var p1 = vertices[i];
+                var p2 = vertices[(i + 1) % vertices.Length];
+                var p3 = vertices[(i + 2) % vertices.Length];
+                
+                var cross = (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x);
+                
+                if (Mathf.Abs(cross) > 1e-6) // Ignore nearly collinear points
                 {
-                    indices.Add(vertexList[0]);
-                    indices.Add(vertexList[1]);
-                    indices.Add(vertexList[2]);
-                }
-                else
-                {
-                    indices.Add(vertexList[0]);
-                    indices.Add(vertexList[2]);
-                    indices.Add(vertexList[1]);
+                    if (sign == 0)
+                        sign = Mathf.Sign(cross);
+                    else if (Mathf.Sign(cross) != sign)
+                        return false; // Found a reflex angle
                 }
             }
-
-            return indices.ToArray();
+            return true;
+        }
+        
+        Vector2 CalculateCentroid(Vector2[] vertices)
+        {
+            var centroid = Vector2.zero;
+            for (var i = 0; i < vertices.Length; i++)
+                centroid += vertices[i];
+            return centroid / vertices.Length;
         }
 
         bool IsEar(Vector2[] vertices, List<int> vertexList, int prev, int curr, int next, bool clockwise)
@@ -378,17 +492,31 @@ namespace WadImporter
 
             // Check if the triangle is convex
             var cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-            if (clockwise && cross < 0) return false;
-            if (!clockwise && cross > 0) return false;
+            var isConvex = clockwise ? cross >= 0 : cross <= 0;
+            
+            if (!isConvex)
+            {
+                // Debug.Log($"[IsEar] Vertex {curr} not convex, cross: {cross}, clockwise: {clockwise}");
+                return false;
+            }
 
             // Check if any other vertex is inside the triangle
+            var insideVertices = new List<int>();
             for (var i = 0; i < vertexList.Count; i++)
             {
                 var v = vertexList[i];
                 if (v == prev || v == curr || v == next) continue;
 
                 if (IsPointInTriangle(vertices[v], a, b, c))
-                    return false;
+                {
+                    insideVertices.Add(v);
+                }
+            }
+
+            if (insideVertices.Count > 0)
+            {
+                // Debug.Log($"[IsEar] Vertex {curr} has {insideVertices.Count} vertices inside triangle");
+                return false;
             }
 
             return true;
